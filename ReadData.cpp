@@ -9,7 +9,7 @@
 
 int main() {
 
-    readData l("sample_data.txt");
+    ReadData l("sample_data.txt");
 
     cout<<l.get_num_of_dimensions()<<endl;
     cout<<l.get_num_of_elements()<<endl;
