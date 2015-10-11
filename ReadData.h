@@ -73,17 +73,12 @@ void ReadData::printDataID(){
    int numOfElements=allDataPointsVec.size();
 
 
-   double dataPoints[numOfElements][numOfDimensions];
    for(int i=0; i<numOfElements; i++)
    {
         for(int j=0; j<numOfDimensions; j++)
         {
-             dataPoints[i][j]=allDataPointsVec[i][j];
-             cout<<"A"<<i<<j<<endl;
+             cout<<"PointID is "<<"A"<<i<<j<<"\t"<<setprecision(20)<<"PointValue is   "<<allDataPointsVec[i][j]<<endl;
         }
    }
 
  }
-
-
-#endif // READDATA_H
