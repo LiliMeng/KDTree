@@ -15,10 +15,10 @@
 
 using namespace std;
 
-class readData{
+class ReadData{
 public:
 
-    readData(string filename);
+    ReadData(string filename);
     vector <vector<double>> allDataPointsVec;
     int get_num_of_elements();
     int get_num_of_dimensions();
@@ -28,7 +28,7 @@ public:
     void printDataID();
 };
 
-readData::readData( string filename )
+ReadData::ReadData( string filename )
 {
     std::ifstream fin(filename.c_str(),std::ios::in);
     if (!fin.is_open())
@@ -56,18 +56,18 @@ readData::readData( string filename )
 
 }
 
-int readData::get_num_of_elements(){
+int ReadData::get_num_of_elements(){
 
     return allDataPointsVec.size();
 }
 
-int readData::get_num_of_dimensions(){
+int ReadData::get_num_of_dimensions(){
 
 return allDataPointsVec[0].size();
 }
 
 
-void readData::printDataID(){
+void ReadData::printDataID(){
 
    int numOfDimensions=allDataPointsVec[0].size();
    int numOfElements=allDataPointsVec.size();
