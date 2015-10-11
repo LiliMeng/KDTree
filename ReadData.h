@@ -22,6 +22,9 @@ public:
     vector <vector<double>> allDataPointsVec;
     int get_num_of_elements();
     int get_num_of_dimensions();
+    /**
+     * Print out the ID of point where the ID is the row in the original file (0-based)
+     */
     void printDataID();
 };
 
