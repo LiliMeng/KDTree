@@ -1,6 +1,7 @@
 /**
  * File: KDTree.h
  * Author Lili Meng (lilimeng1103@gmail.com) mainly based on the code by Keith Schwarz (htiek@cs.stanford.edu)
+ * Thanks a lot for the fruitful discussion with Jimmy Chen, Victor Gan, Keith Schwarz.
  * ------------------------
  * Perform constructing trees, efficient exact query for k-nearest neighbors based on Bounded priority queue kd-tree,
  * Best-Bin-First(BBF) query for k-nearest points based on BPQ.
@@ -317,9 +318,9 @@ void KDTree<N, ElemType>::insert(const Point<N>& pt, const ElemType& value) {
             currentNode->value = value;
         }
 
-        size_t keyIndex = currentNode->level % N;
+        size_t dim = currentNode->level % N;
 
-        if(pt[keyIndex] < currentNode->key[keyIndex]){
+        if(pt[dim] < currentNode->key[dim]){
             prevNode = currentNode;
             currentNode = currentNode->left;
         }
@@ -371,9 +372,9 @@ ElemType& KDTree<N, ElemType>::operator[](const Point<N>& pt){
             return currentNode->value;
         }
 
-        size_t keyIndex = currentNode->level % N;
+        size_t dim = currentNode->level % N;
 
-        if(pt[keyIndex] < currentNode->key[keyIndex]) {
+        if(pt[dim] < currentNode->key[dim]) {
             prevNode = currentNode;
             currentNode = currentNode->left;
         }
@@ -424,11 +425,11 @@ ElemType& KDTree<N, ElemType>::at(const Point<N>& pt){
             return currentNode->value;
         }
 
-        //Find the keyIndex
-        size_t keyIndex = currentNode->level % N;
+        //Find the dim
+        size_t dim = currentNode->level % N;
 
         //compare the approximate indices
-        if(pt[keyIndex] < currentNode->key[keyIndex]) {
+        if(pt[dim] < currentNode->key[dim]) {
             currentNode = currentNode->left;
         }
         else {
@@ -449,9 +450,9 @@ const ElemType& KDTree<N, ElemType>::at(const Point<N>& pt) const {
             return currentNode->value;
         }
 
-        size_t keyIndex = currentNode->level % N;
+        size_t dim = currentNode->level % N;
 
-        if(pt[keyIndex] < currentNode ->key[keyIndex]) {
+        if(pt[dim] < currentNode ->key[dim]) {
             currentNode = currentNode->left;
         }
         else {
@@ -623,8 +624,7 @@ ElemType KDTree<N, ElemType>::BBFKNNValue(const Point<N>& key, size_t k, size_t 
 
         for(size_t i=0; i< currentNode->n; ++i)
         {
-            dist = euclidean(currentNode->points[i].data, key,
-                                       N,false);
+            dist = Distance(currentNode->key, key);
 
             if(dist < currentBest)
             {
@@ -666,4 +666,3 @@ ElemType KDTree<N, ElemType>::BBFKNNValue(const Point<N>& key, size_t k, size_t 
 }
 
 #endif // KDTREE_INCLUDED
-
