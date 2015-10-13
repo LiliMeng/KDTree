@@ -4,8 +4,8 @@
  * Thanks a lot for the fruitful discussion with Jimmy Chen, Victor Gan, Keith Schwarz.
  * ------------------------
  * Perform constructing trees, efficient exact query for k-nearest neighbors based on Bounded priority queue kd-tree,
- * Best-Bin-First(BBF) query for k-nearest points based on BPQ.
- * For more BBF query of KNN, please refer to
+ * Best-Bin-First(BBF) query for approximate k-nearest neighbors search.
+ * For more BBF query, please refer to
  * Beis, J. S. and Lowe, D. G.  Shape indexing using approximate nearest-neighbor search in high-dimensional spaces.
  *
  * An interface representing a kd-tree in some number of dimensions. The tree
