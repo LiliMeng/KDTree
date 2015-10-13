@@ -1,4 +1,4 @@
-
+/**
  * File: KDTree.h
  * Author Lili Meng (lilimeng1103@gmail.com) based on the starter code by Keith Schwarz (htiek@cs.stanford.edu)
  * ------------------------
