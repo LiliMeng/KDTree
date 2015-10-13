@@ -1,9 +1,12 @@
 /**
  * File: KDTree.h
- * Author Lili Meng (lilimeng1103@gmail.com) based on the starter code by Keith Schwarz (htiek@cs.stanford.edu)
+ * Author Lili Meng (lilimeng1103@gmail.com) mainly based on the code by Keith Schwarz (htiek@cs.stanford.edu)
  * ------------------------
  * Perform constructing trees, efficient exact query for k-nearest neighbors based on Bounded priority queue kd-tree,
- * Best-Bin-First query for k-nearest points based on BPQ.
+ * Best-Bin-First(BBF) query for k-nearest points based on BPQ.
+ * For more BBF query of KNN, please refer to
+ * Beis, J. S. and Lowe, D. G.  Shape indexing using approximate nearest-neighbor search in high-dimensional spaces.
+ *
  * An interface representing a kd-tree in some number of dimensions. The tree
  * can be constructed from a set of data and then queried for membership and
  * nearest neighbors.
@@ -122,7 +125,7 @@ public:
     ElemType kNNValue(const Point<N>& key, size_t k) const;
 
 
-    ElemType BBFkNNValue(const Point<N>& key, size_t k, size_t max_epoch) const;
+    ElemType BBFKNNValue(const Point<N>& key, size_t k, size_t maxEpoch);
 
 private:
 
@@ -133,6 +136,7 @@ private:
         Point<N> key;
         ElemType value;
         size_t level;
+        int n; // number of Point<N> in one TreeNode*
         //int leaf;   /** 1 if node is a leaf, 0 otherwise */
 
         TreeNode* left;
@@ -158,9 +162,6 @@ private:
     /** Helper function for copying KDTree **/
     TreeNode* copyTree(TreeNode* rootNode);
 
-    /** function for traversing to the leaf＊*/
-    TreeNode* traverse_to_leaf(Point<N> pt, TreeNode* root, NodeMinPQ& container);
-
     /** KNNValue helper function of building BoundedPQueue for the KNNValue  */
     void KNNValuehelper(const Point<N>&key, BoundedPQueue<TreeNode*>& nearestPQ, TreeNode* currentNode) const;
 
@@ -169,13 +170,9 @@ private:
      stored in the Nodes of a TreeNode* BPQ **/
     ElemType FindBestValueInBPQ(BoundedPQueue<TreeNode*> nearestPQ) const;
 
-    /**
-     BBFKNNValue helper function of building BoundedPQueue for BBFKNNValue
-    void BBFKNNValuehelper(const Point<N>& key, BoundedPQueue<TreeNode*>& nearestPQ, TreeNode* currentNode) const;
 
-     A helper function that returns the best value stored in BBF BPQ
-    ElemType BBFFindBestValueINBPQ(BoundedPQueue<TreeNode*> nearestPQ);
-    **/
+    /** function for traversing to the leaf＊*/
+    TreeNode* traverse_to_leaf(Point<N> pt, TreeNode* root, NodeMinPQ& container);
 
 };
 
@@ -546,33 +543,39 @@ ElemType KDTree<N, ElemType>::FindBestValueInBPQ(BoundedPQueue<TreeNode*> neares
 template <size_t N, typename ElemType>
 typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::traverse_to_leaf(Point<N> pt, TreeNode* root, NodeMinPQ& minPQ)
 {
-        TreeNode* other;
+        TreeNode* untraversed;     // untraversed storing the untraversed TreeNode* on the KD-Tree
         TreeNode* currentNode = root;
 
-        double value=currentNode->value;
-        size_t dim = currentNode->level % N;
+        double value;
+        size_t dim;
 
-        while(currentNode!=NULL && currentNode->left==NULL && currentNode->right==NULL)
+        while(currentNode!=NULL && currentNode->left!=NULL && currentNode->right!=NULL)   //currentNode->left!=NULL&& currentNode->right!=NULL signifies that currentNode is not a leaf
         {
             // partition dimension and value
             dim = currentNode->level % N;
             value = currentNode->value;
 
+            if(dim>=N)
+            {
+                cout<<"error, comparing imcompatibale points"<<endl;
+                return NULL;
+            }
+
             // go to a child and preserve the other
             if(pt[dim] <= value)
             {
+                untraversed = currentNode->right;
                 currentNode = currentNode->left;
-                other = currentNode->right;
             }
             else
             {
+                untraversed = currentNode->left;
                 currentNode = currentNode->right;
-                other = currentNode->left;
             }
 
-            if(other!=NULL)
+            if(untraversed!=NULL)
             {
-                minPQ.push(NodeBind(other, abs(other->value - pt[other->level % N])));
+                minPQ.push(NodeBind(untraversed, fabs(untraversed->value - pt[untraversed->level % N])));
             }
         }
 
@@ -581,70 +584,70 @@ typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::traverse_to_leaf(Po
 
 /**
      * Search for approximate k nearest neighbours using the
-     * Best Bin First approach.
+     * Best-Bin-First(BBF) approach.
      *
      * @param Point<N>   query point data in array form
      * @param k          number of nearest neighbour returned
-     * @param max_epoch  maximum of epoch of search
+     * @param maxEpoch   maximum of epoch of search
      *
      * @return
      */
 template <size_t N, typename ElemType>
-ElemType KDTree<N, ElemType>::BBFkNNValue(const Point<N>& pt, size_t k, size_t max_epoch) const {
+ElemType KDTree<N, ElemType>::BBFKNNValue(const Point<N>& key, size_t k, size_t maxEpoch) {
 
     ElemType result;
 
     size_t epoch = 0;
 
-    TreeNode* node;
+    TreeNode* currentNode;
 
     // checklist for backtracking;
     NodeMinPQ minPQ;
 
-    // min priority queue to keep top k largest
-    PointMaxPQ max_pq;
+    // min priority queue to keep top k best distance from query point to the bin
+    BoundedPQueue<TreeNode*> nearestPQ(k);
 
-    double cur_best = numeric_limits<double>::max();
+    double currentBest = numeric_limits<double>::max();
 
     double dist = 0;
 
-    minPQ.push(NodeBind(this->root, 0));
+    minPQ.push(NodeBind(this->root, 0));    //
 
-    while(!minPQ.empty() && epoch < max_epoch)
+    while(!minPQ.empty() && epoch < maxEpoch)
     {
-        node = minPQ.top().key;
+        currentNode = minPQ.top().key;
         minPQ.pop();
 
         // find leaf and push unprocessed to minPQ
-        node = this->traverse_to_leaf(pt, node, minPQ);
+        currentNode = traverse_to_leaf(key, currentNode, minPQ);
 
-        for(size_t i=0; i< node->n; ++i)
+        for(size_t i=0; i< currentNode->n; ++i)
         {
-            dist = euclidean(node->points[i].data, pt,
+            dist = euclidean(currentNode->points[i].data, key,
                                        N,false);
 
-            if(dist < cur_best)
+            if(dist < currentBest)
             {
                 // maintain the bounded min priority queue
-                if(max_pq.size()==k)
+                if(nearestPQ.size()==k)
                 {
                     //update current best
-                    max_pq.pop();
-                    max_pq.push(KeyValue<Point<N>>(node->pt[i], dist));
-                    cur_best = max_pq.top().value;
+                    nearestPQ.pop();
+                    nearestPQ.push(KeyValue<Point<N>>(currentNode->key[i], dist));
+                    currentBest = nearestPQ.top().value;
                 }
 
                // the special point here is that we need to set best
                // distance to the distance value of largest smallest
                // feature
-                else if(max_pq.size() == k-1)
+                else if(nearestPQ.size() == k-1)
                 {
-                    max_pq.push(KeyValue<Point<N>>(node->features[i], dist));
-                    cur_best = max_pq.top().value;
+                    nearestPQ.push(KeyValue<Point<N>>(currentNode->key[i], dist));
+                    currentBest = nearestPQ.top().value;
                 }
                 else
                 {
-                    max_pq.push(KeyValue<Point<N>>(node->features[i], dist));
+                    nearestPQ.push(KeyValue<Point<N>>(currentNode->key[i], dist));
                 }
             }
         }
@@ -652,14 +655,15 @@ ElemType KDTree<N, ElemType>::BBFkNNValue(const Point<N>& pt, size_t k, size_t m
     }
 
         // finally pass results to returned result
-        const size_t detected = max_pq.size();
+        const size_t detected = nearestPQ.size();
         for(size_t i = 0; i < detected ; ++i)
         {
-            result.push_back(max_pq.top().key);
-            max_pq.pop();
+            result.push_back(nearestPQ.top().key);
+            nearestPQ.pop();
         }
 
     return result;
 }
 
 #endif // KDTREE_INCLUDED
+
