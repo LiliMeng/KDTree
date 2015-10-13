@@ -14,10 +14,22 @@
 
 #include "Point.h"
 #include "BoundedPQueue.h"
+#include "KDTree_math.h"
 #include <stdexcept>
 #include <cmath>
+#include <queue>
 
 using namespace std;
+
+/// key value pair. Not use the std::pair because there is default
+/// "<" operator overloading for it and it is too heavy for operation.
+template <class T, class V = double>
+struct KeyValue
+{
+    T key;
+    V value;
+    KeyValue(const T k, const V v) : key(k), value(v){}
+};
 
 template <size_t N, typename ElemType>
 class KDTree {
@@ -109,21 +121,30 @@ public:
      **/
     ElemType kNNValue(const Point<N>& key, size_t k) const;
 
-    /*
-    ElemType BBFkNNValue(const Point<N>& key, size_t k) const;
-    */
+
+    ElemType BBFkNNValue(const Point<N>& key, size_t k, size_t max_epoch) const;
+
 private:
-    /** implementation details **/
+
+  /** implementation details **/
 
     struct TreeNode {
 
         Point<N> key;
         ElemType value;
         size_t level;
+        //int leaf;   /** 1 if node is a leaf, 0 otherwise */
 
         TreeNode* left;
         TreeNode* right;
     };
+
+     // typedef to avoid ugly long declaration
+    //typedef stack<TreeNode*> NodeStack;
+    typedef KeyValue<TreeNode*> NodeBind;
+    typedef priority_queue<NodeBind, vector<NodeBind>, greater<NodeBind> > NodeMinPQ;
+    typedef KeyValue<Point<N>> PointBind;
+    typedef priority_queue<PointBind, vector<PointBind> > PointMaxPQ;
 
     TreeNode* root;
 
@@ -137,12 +158,24 @@ private:
     /** Helper function for copying KDTree **/
     TreeNode* copyTree(TreeNode* rootNode);
 
-    /** Recursive helper function for the KNNValue function */
-    void KNNValueRecurse(const Point<N>&key, BoundedPQueue<TreeNode*>& nearestPQ, TreeNode* currentNode) const;
+    /** function for traversing to the leaf＊*/
+    TreeNode* traverse_to_leaf(Point<N> pt, TreeNode* root, NodeMinPQ& container);
 
-    /** A helper function that returns the most commonly occuring value
-     stored in the Nodes of a Node* PQ **/
-    ElemType FindMostCommonValueInPQ(BoundedPQueue<TreeNode*> nearestPQ) const;
+    /** KNNValue helper function of building BoundedPQueue for the KNNValue  */
+    void KNNValuehelper(const Point<N>&key, BoundedPQueue<TreeNode*>& nearestPQ, TreeNode* currentNode) const;
+
+   /**
+    A helper function that returns the best value
+     stored in the Nodes of a TreeNode* BPQ **/
+    ElemType FindBestValueInBPQ(BoundedPQueue<TreeNode*> nearestPQ) const;
+
+    /**
+     BBFKNNValue helper function of building BoundedPQueue for BBFKNNValue
+    void BBFKNNValuehelper(const Point<N>& key, BoundedPQueue<TreeNode*>& nearestPQ, TreeNode* currentNode) const;
+
+     A helper function that returns the best value stored in BBF BPQ
+    ElemType BBFFindBestValueINBPQ(BoundedPQueue<TreeNode*> nearestPQ);
+    **/
 
 };
 
@@ -438,79 +471,195 @@ template <size_t N, typename ElemType>
 ElemType KDTree<N, ElemType>::kNNValue(const Point<N>& key, size_t k) const {
 
     BoundedPQueue<TreeNode*> nearestPQ(k);
-    KNNValueRecurse(key, nearestPQ, root);
+    KNNValuehelper(key, nearestPQ, root);
 
-    return FindMostCommonValueInPQ(nearestPQ);
+    return FindBestValueInBPQ(nearestPQ);
 }
 
-/*
- * KNNValueRecurse(pt, bpq, currentNode)
- * A recursive helper function which builds a bounded priority queue of the points
- * nearest to the entered point in the KDTree
- */
+
+/**
+ * KNNValuehelper(key, bpq, currentNode)
+ * key--query point
+ * A helper function of building the bounded priority queue of points nearest to the query point in the KDTree
+ **/
+
 template<size_t N, typename ElemType>
-void KDTree<N, ElemType>::KNNValueRecurse(const Point<N>& key, BoundedPQueue<TreeNode*>& nearestPQ, TreeNode* currentNode) const {
+void KDTree<N, ElemType>::KNNValuehelper(const Point<N>& key, BoundedPQueue<TreeNode*>& nearestPQ, TreeNode* currentNode) const {
 
     if (currentNode == NULL) return;
 
     nearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
 
-    //Recursion
-    size_t keyIndex = currentNode->level % N;
-    if(key[keyIndex] < currentNode->key[keyIndex]) {
-        KNNValueRecurse(key, nearestPQ, currentNode->left);
+    size_t dim = currentNode->level % N;
 
-        //If the hypersphere crosses the splitting plane check the other subtree
-        if(nearestPQ.size()!=nearestPQ.maxSize() || fabs(currentNode->key[keyIndex] - key[keyIndex]) < nearestPQ.worst() ) {
-            KNNValueRecurse(key, nearestPQ, currentNode->right);
+    //like Binary Search Tree, if key[dim] < currentNode->key[dim], turn to the left of the tree
+    if(key[dim] < currentNode->key[dim])
+    {
+        KNNValuehelper(key, nearestPQ, currentNode->left);
+
+        // If the query hypersphere crosses the splitting plane, check the other subtree
+        if(nearestPQ.size() < nearestPQ.maxSize() || fabs(currentNode->key[dim] - key[dim]) < nearestPQ.worst() ) {
+
+            KNNValuehelper(key, nearestPQ, currentNode->right);
         }
     }
-    else {
+    else //like Binary Search Tree, if key[dim] >= currentNode->key[dim], turn to the right of the tree
+    {
+        KNNValuehelper(key, nearestPQ, currentNode->right);
 
-        KNNValueRecurse(key, nearestPQ, currentNode->right);
+        // If the hypersphere crosses the splitting plane, check the other subtree
+        if(nearestPQ.size() < nearestPQ.maxSize() || fabs(currentNode->key[dim] - key[dim]) < nearestPQ.worst() ) {
 
-        //If the hypersphere crosses the splitting plane check the other subtree
-        if((nearestPQ.size() != nearestPQ.maxSize()) || fabs(currentNode->key[keyIndex] - key[keyIndex]) < nearestPQ.worst() ){
-            KNNValueRecurse(key, nearestPQ, currentNode->left);
+            KNNValuehelper(key, nearestPQ, currentNode->left);
         }
 
     }
-
 }
 
-/*
- * FindMostCommonValueInPQ(bpq)
- * Takes in a bounded priority queue of Node* in the KDTree and
- * returns the most common value stored in the nodes.
+/**
+ * FindBestValueInBPQ
+ * Takes in a bounded Priority Queue of TreeNode* in the KDTree and
+ * returns the best value
  */
 template<size_t N, typename ElemType>
-ElemType KDTree<N, ElemType>::FindMostCommonValueInPQ(BoundedPQueue<TreeNode*> nearestPQ) const{
+ElemType KDTree<N, ElemType>::FindBestValueInBPQ(BoundedPQueue<TreeNode*> nearestPQ) const {
+
     multiset<ElemType> values;
     while(!nearestPQ.empty()) {
         values.insert((nearestPQ.dequeueMin())->value);
     }
 
-    ElemType best;
-    size_t bestFrequency = 0;
-    for(typename multiset<ElemType>::iterator iter = values.begin(); iter!=values.end(); ++iter){
-        if(values.count(*iter) > bestFrequency) {
-            best = *iter;
-            bestFrequency = values.count(*iter);
+    ElemType bestMatch;
+    size_t bestOccurence = 0;
+    for(auto iter = values.begin(); iter!=values.end(); ++iter) {
+        if(values.count(*iter) > bestOccurence)
+        {
+            bestMatch = * iter;
+            bestOccurence = values.count(*iter);
         }
     }
-   return best;
+
+    return bestMatch;
 }
 
-/*
-/** Best-Bin-First Query for K Nearest-Neigbour
+/** Function for traversing the tree **/
 template <size_t N, typename ElemType>
-ElemType KDTree<N, ElemType>::BBFkNNValue(const Point<N>& key, size_t k) const {
+typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::traverse_to_leaf(Point<N> pt, TreeNode* root, NodeMinPQ& minPQ)
+{
+        TreeNode* other;
+        TreeNode* currentNode = root;
 
-    BoundedPQueue<TreeNode*> nearestPQ(k);
-    KNNValueRecurse(key, nearestPQ, root);
+        double value=currentNode->value;
+        size_t dim = currentNode->level % N;
 
-    return FindMostCommonValueInPQ(nearestPQ);
+        while(currentNode!=NULL && currentNode->left==NULL && currentNode->right==NULL)
+        {
+            // partition dimension and value
+            dim = currentNode->level % N;
+            value = currentNode->value;
 
-}**/
+            // go to a child and preserve the other
+            if(pt[dim] <= value)
+            {
+                currentNode = currentNode->left;
+                other = currentNode->right;
+            }
+            else
+            {
+                currentNode = currentNode->right;
+                other = currentNode->left;
+            }
+
+            if(other!=NULL)
+            {
+                minPQ.push(NodeBind(other, abs(other->value - pt[other->level % N])));
+            }
+        }
+
+        return currentNode;
+    }
+
+/**
+     * Search for approximate k nearest neighbours using the
+     * Best Bin First approach.
+     *
+     * @param Point<N>   query point data in array form
+     * @param k          number of nearest neighbour returned
+     * @param max_epoch  maximum of epoch of search
+     *
+     * @return
+     */
+template <size_t N, typename ElemType>
+ElemType KDTree<N, ElemType>::BBFkNNValue(const Point<N>& pt, size_t k, size_t max_epoch) const {
+
+    ElemType result;
+
+    size_t epoch = 0;
+
+    TreeNode* node;
+
+    // checklist for backtracking;
+    NodeMinPQ minPQ;
+
+    // min priority queue to keep top k largest
+    PointMaxPQ max_pq;
+
+    double cur_best = numeric_limits<double>::max();
+
+    double dist = 0;
+
+    minPQ.push(NodeBind(this->root, 0));
+
+    while(!minPQ.empty() && epoch < max_epoch)
+    {
+        node = minPQ.top().key;
+        minPQ.pop();
+
+        // find leaf and push unprocessed to minPQ
+        node = this->traverse_to_leaf(pt, node, minPQ);
+
+        for(size_t i=0; i< node->n; ++i)
+        {
+            dist = euclidean(node->points[i].data, pt,
+                                       N,false);
+
+            if(dist < cur_best)
+            {
+                // maintain the bounded min priority queue
+                if(max_pq.size()==k)
+                {
+                    //update current best
+                    max_pq.pop();
+                    max_pq.push(KeyValue<Point<N>>(node->pt[i], dist));
+                    cur_best = max_pq.top().value;
+                }
+
+               // the special point here is that we need to set best
+               // distance to the distance value of largest smallest
+               // feature
+                else if(max_pq.size() == k-1)
+                {
+                    max_pq.push(KeyValue<Point<N>>(node->features[i], dist));
+                    cur_best = max_pq.top().value;
+                }
+                else
+                {
+                    max_pq.push(KeyValue<Point<N>>(node->features[i], dist));
+                }
+            }
+        }
+            ++epoch;
+    }
+
+        // finally pass results to returned result
+        const size_t detected = max_pq.size();
+        for(size_t i = 0; i < detected ; ++i)
+        {
+            result.push_back(max_pq.top().key);
+            max_pq.pop();
+        }
+
+    return result;
+}
 
 #endif // KDTREE_INCLUDED
