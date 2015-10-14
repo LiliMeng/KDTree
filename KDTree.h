@@ -16,12 +16,13 @@
 #ifndef KDTREE_INCLUDED
 #define KDTREE_INCLUDED
 
-#include "Point.h"
-#include "BoundedPQueue.h"
-#include "KDTree_math.h"
 #include <stdexcept>
 #include <cmath>
 #include <queue>
+
+#include "Point.h"
+#include "BoundedPQueue.h"
+#include "ReadData.h"
 
 using namespace std;
 
@@ -80,6 +81,10 @@ public:
     size_t size() const;
     bool empty() const;
 
+     /** load data from file **/
+
+    void loadData(string dataFileName, vector<vector<double>>& dataPointsVec)
+
     /** bool contains(const Point<N>& pt) const;
      * Usage: if (kd.contains(pt))
      * ----------------------------------------------------
@@ -94,7 +99,11 @@ public:
      * value. If the element already existed in the tree, the new value will
      * overwrite the existing one.
      **/
+
     void insert(const Point<N>& pt, const ElemType& value);
+
+    /** Build Tree*/
+    void buildTree(vector<vector<double> > dataPointsVec, const ElemType& value)
 
     /** ElemType& operator[](const Point<N>& pt);
      * Usage: kd[v] = "Some Value";
@@ -125,8 +134,9 @@ public:
      **/
     multiset<ElemType> kNNValues(const Point<N>& key, size_t k) const;
 
+    multiset<Point<N>> getkNNPoints(const Point<N>& key, size_t k) const;
 
-    multiset<ElemType> BBFKNNValues(const Point<N>& key, size_t k, size_t maxEpoch);
+    multiset<Point<N>> getBBFKNNPoints(const Point<N>& key, size_t k, size_t maxEpoch);
 
 private:
 
@@ -148,8 +158,6 @@ private:
     //typedef stack<TreeNode*> NodeStack;
     typedef KeyValue<TreeNode*> NodeBind;
     typedef priority_queue<NodeBind, vector<NodeBind>, greater<NodeBind> > NodeMinPQ;
-    typedef KeyValue<Point<N>> PointBind;
-    typedef priority_queue<PointBind, vector<PointBind> > PointMaxPQ;
 
     TreeNode* root;
 
@@ -297,11 +305,20 @@ bool KDTree<N, ElemType>::contains(const Point<N>& pt) const{
     return false;
 }
 
+template <size_t N, typename ElemType>
+void KDTree<N, ElemType>::loadData(string dataFileName, vector<vector<double>>& dataPointsVec) {
+
+    ReadData rd("sample_data.txt");
+    int row=rd1.get_num_of_elements();
+    int N=rd1.get_num_of_dimensions();
+    dataPointsVec=rd1.allDataPointsVec;
+}
 
 
 /** Insert the specified point into the KDTree with associated value. If the point already exists in the KDTree, the old value is overwritten **/
 template <size_t N, typename ElemType>
 void KDTree<N, ElemType>::insert(const Point<N>& pt, const ElemType& value) {
+
 
     TreeNode* currentNode = root;
     TreeNode* prevNode = NULL;
@@ -352,6 +369,29 @@ void KDTree<N, ElemType>::insert(const Point<N>& pt, const ElemType& value) {
         }
     }
 }
+
+template <size_t N, typename ElemType>
+void KDTree<N, ElemType>::buildTree(vector<vector<double> > dataPointsVec, const ElemType& value)
+{
+
+    Point<N> dataPoint;
+    for(int i=0; i<dataPointsVec.size(); i++)
+    {
+        for(int j=0; j<dataPointsVec[i].size(); j++)
+        {
+            dataPoint.coords[j]=dataPointsVec[i][j];
+        }
+
+    }
+
+     for(int i=0; i<dataPointsVec.size(); i++)
+    {
+
+        insert(dataPoint, value);
+
+    }
+}
+
 
 /** Returns a reference to the value associated with the point pt. If the point does not exist in the KDTree, it is added with
  * the default value of ElemType as its value, and a reference to this new value is returned. This is the same behavior as the
@@ -478,6 +518,20 @@ multiset<ElemType> KDTree<N, ElemType>::kNNValues(const Point<N>& key, size_t k)
     return values;
 }
 
+/** Exact Query of K Nearest-Neigbour **/
+template <size_t N, typename ElemType>
+multiset<Point<N>> KDTree<N, ElemType>::getkNNPoints(const Point<N>& key, size_t k) const {
+
+    BoundedPQueue<TreeNode*> kNearestPQ(k);
+    KNNValueshelper(key, kNearestPQ, root);
+
+    multiset<Point<N>> kNNPoints;
+    while(!kNearestPQ.empty())
+    {
+        values.insert((kNearestPQ.dequeueMin())->key);
+    }
+    return kNNPoints;
+}
 
 /**
  * KNNValueshelper(key, bpq, currentNode)
@@ -570,9 +624,9 @@ typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::exploreToLeaf(Point
     * @param maxEpoch   maximum search epoch
     **/
 template <size_t N, typename ElemType>
-multiset<ElemType> KDTree<N, ElemType>::BBFKNNValues(const Point<N>& key, size_t k, size_t maxEpoch) {
+multiset<Point<N>> KDTree<N, ElemType>::getBBFKNNPoints(const Point<N>& key, size_t k, size_t maxEpoch) {
 
-    multiset<ElemType> result;
+    multiset<Point<N>> result;
 
     size_t epoch = 0;
 
@@ -593,10 +647,32 @@ multiset<ElemType> KDTree<N, ElemType>::BBFKNNValues(const Point<N>& key, size_t
         currentNode = minPQ.top().key;
         minPQ.pop();
 
-        //find leaf node and push unprocessed to minPQ
+        //find leaf node and push unexplored to minPQ
         currentNode = exploreToLeaf(key, currentNode, minPQ);
     }
 
+    dist = Distance(currentNode->key, key);
+
+    if(dist < currentBest)
+    {
+        if(kNearestPQ.size()==k)
+        {
+            //update the currentBest;
+            kNearestPQ.pop();
+            kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
+            currentBest = kNearestPQ.top()->value;
+        }
+        else if(kNearestPQ.size()==k-1)
+        {
+            kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
+            currentBest = kNearestPQ.top()->value;
+        }
+        else
+        {
+
+        }
+
+    }
     dist = Distance(currentNode->key, key);
 
 
@@ -606,17 +682,17 @@ multiset<ElemType> KDTree<N, ElemType>::BBFKNNValues(const Point<N>& key, size_t
         {
             //update the currentBest;
             kNearestPQ.pop();
-            kNearestPQ.push(KeyValue<Point<N>>(currentNode->key, dist));
-            currentBest = kNearestPQ.top().value;
+            kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
+            currentBest = kNearestPQ.top()->second;
         }
         else if(kNearestPQ.size() == k-1)
         {
-            kNearestPQ.push(KeyValue<Point<N>(currentNode->key, dist));
-            currentBest = kNearestPQ.top().value;
+            kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
+            currentBest = kNearestPQ.top()->second;
         }
         else
         {
-            knearestPQ.push(KeyValue<Point<N>>(currentNode->key, dist));
+            kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
         }
     }
 
@@ -624,7 +700,7 @@ multiset<ElemType> KDTree<N, ElemType>::BBFKNNValues(const Point<N>& key, size_t
 
     while(!kNearestPQ.empty())
     {
-        result.insert((kNearestPQ.dequeueMin())->value);
+        result.insert((kNearestPQ.dequeueMin())->key);
     }
 
     return result;
