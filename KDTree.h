@@ -1,7 +1,7 @@
 /**
  * File: KDTree.h
  * Author Lili Meng (lilimeng1103@gmail.com) mainly based on the code by Keith Schwarz (htiek@cs.stanford.edu)
- * Thanks a lot for the fruitful discussion with Jimmy Chen, Victor Gan, Keith Schwarz.
+ * Thanks a lot for the discussion with Jimmy Chen, Victor Gan, Keith Schwarz, Davide Lowe.
  * ------------------------
  * Perform constructing trees, efficient exact query for k-nearest neighbors based on Bounded priority queue kd-tree,
  * Best-Bin-First(BBF) query for approximate k-nearest neighbors search.
