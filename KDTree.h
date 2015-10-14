@@ -683,12 +683,12 @@ multiset<Point<N>> KDTree<N, ElemType>::getBBFKNNPoints(const Point<N>& key, siz
             //update the currentBest;
             kNearestPQ.pop();
             kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
-            currentBest = kNearestPQ.top()->second;
+            currentBest = kNearestPQ.best();
         }
         else if(kNearestPQ.size() == k-1)
         {
             kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
-            currentBest = kNearestPQ.top()->second;
+            currentBest = kNearestPQ.best();
         }
         else
         {
