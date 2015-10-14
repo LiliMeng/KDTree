@@ -1,7 +1,7 @@
 /**
  * File: KDTree.h
  * Author Lili Meng (lilimeng1103@gmail.com) mainly based on the code by Keith Schwarz (htiek@cs.stanford.edu)
- * Thanks a lot for the discussion with Jimmy Chen, Victor Gan, Keith Schwarz, Davide Lowe.
+ * Thanks a lot for the fruitful discussion with Jimmy Chen, Victor Gan, Keith Schwarz.
  * ------------------------
  * Perform constructing trees, efficient exact query for k-nearest neighbors based on Bounded priority queue kd-tree,
  * Best-Bin-First(BBF) query for approximate k-nearest neighbors search.
@@ -652,29 +652,6 @@ multiset<Point<N>> KDTree<N, ElemType>::getBBFKNNPoints(const Point<N>& key, siz
     }
 
     dist = Distance(currentNode->key, key);
-
-    if(dist < currentBest)
-    {
-        if(kNearestPQ.size()==k)
-        {
-            //update the currentBest;
-            kNearestPQ.pop();
-            kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
-            currentBest = kNearestPQ.top()->value;
-        }
-        else if(kNearestPQ.size()==k-1)
-        {
-            kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
-            currentBest = kNearestPQ.top()->value;
-        }
-        else
-        {
-
-        }
-
-    }
-    dist = Distance(currentNode->key, key);
-
 
     if(dist < currentBest)
     {
