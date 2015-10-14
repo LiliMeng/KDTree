@@ -123,10 +123,10 @@ public:
      * points. In the event of a tie, one of the most frequent value will be
      * chosen.
      **/
-    ElemType kNNValue(const Point<N>& key, size_t k) const;
+    multiset<ElemType> kNNValues(const Point<N>& key, size_t k) const;
 
 
-    ElemType BBFKNNValue(const Point<N>& key, size_t k, size_t maxEpoch);
+    multiset<ElemType> BBFKNNValues(const Point<N>& key, size_t k, size_t maxEpoch);
 
 private:
 
@@ -137,7 +137,7 @@ private:
         Point<N> key;
         ElemType value;
         size_t level;
-        int n; // number of Point<N> in one TreeNode*
+        //int n; number of Point<N> in one TreeNode*, that is to say, how many children does this TreeNode have?
         //int leaf;   /** 1 if node is a leaf, 0 otherwise */
 
         TreeNode* left;
@@ -164,16 +164,13 @@ private:
     TreeNode* copyTree(TreeNode* rootNode);
 
     /** KNNValue helper function of building BoundedPQueue for the KNNValue  */
-    void KNNValuehelper(const Point<N>&key, BoundedPQueue<TreeNode*>& nearestPQ, TreeNode* currentNode) const;
-
-   /**
-    A helper function that returns the best value
-     stored in the Nodes of a TreeNode* BPQ **/
-    ElemType FindBestValueInBPQ(BoundedPQueue<TreeNode*> nearestPQ) const;
-
+    void KNNValueshelper(const Point<N>&key, BoundedPQueue<TreeNode*>& kNearestPQ, TreeNode* currentNode) const;
 
     /** function for traversing to the leaf＊*/
-    TreeNode* traverse_to_leaf(Point<N> pt, TreeNode* root, NodeMinPQ& container);
+    TreeNode* exploreToLeaf(Point<N> pt, TreeNode* root, NodeMinPQ& container);
+
+    /** function for counting the number of Point<N> under one TreeNode*/
+    int countNodes(TreeNode* root);  // that is to say, how many children nodes does this TreeNode have?
 
 };
 
@@ -320,6 +317,8 @@ void KDTree<N, ElemType>::insert(const Point<N>& pt, const ElemType& value) {
 
         size_t dim = currentNode->level % N;
 
+        // If pt[dim] >= currentNode->key[dim],insert the node to the right node.
+
         if(pt[dim] < currentNode->key[dim]){
             prevNode = currentNode;
             currentNode = currentNode->left;
@@ -343,13 +342,13 @@ void KDTree<N, ElemType>::insert(const Point<N>& pt, const ElemType& value) {
         root = newNode;
     }
     else {
-        if(pt[prevNode->level % N]>=prevNode->key[prevNode->level % N])
+        if(pt[prevNode->level % N]<prevNode->key[prevNode->level % N])
         {
-            prevNode->right = newNode;
+            prevNode->left = newNode;
         }
         else
         {
-            prevNode->left = newNode;
+            prevNode->right = newNode;
         }
     }
 }
@@ -466,201 +465,166 @@ const ElemType& KDTree<N, ElemType>::at(const Point<N>& pt) const {
 
 /** Exact Query of K Nearest-Neigbour **/
 template <size_t N, typename ElemType>
-ElemType KDTree<N, ElemType>::kNNValue(const Point<N>& key, size_t k) const {
+multiset<ElemType> KDTree<N, ElemType>::kNNValues(const Point<N>& key, size_t k) const {
 
-    BoundedPQueue<TreeNode*> nearestPQ(k);
-    KNNValuehelper(key, nearestPQ, root);
+    BoundedPQueue<TreeNode*> kNearestPQ(k);
+    KNNValueshelper(key, kNearestPQ, root);
 
-    return FindBestValueInBPQ(nearestPQ);
+    multiset<ElemType> values;
+    while(!kNearestPQ.empty())
+    {
+        values.insert((kNearestPQ.dequeueMin())->value);
+    }
+    return values;
 }
 
 
 /**
- * KNNValuehelper(key, bpq, currentNode)
+ * KNNValueshelper(key, bpq, currentNode)
  * key--query point
  * A helper function of building the bounded priority queue of points nearest to the query point in the KDTree
  **/
 
 template<size_t N, typename ElemType>
-void KDTree<N, ElemType>::KNNValuehelper(const Point<N>& key, BoundedPQueue<TreeNode*>& nearestPQ, TreeNode* currentNode) const {
+void KDTree<N, ElemType>::KNNValueshelper(const Point<N>& key, BoundedPQueue<TreeNode*>& kNearestPQ, TreeNode* currentNode) const {
 
     if (currentNode == NULL) return;
 
-    nearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
+    kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
 
     size_t dim = currentNode->level % N;
 
     //like Binary Search Tree, if key[dim] < currentNode->key[dim], turn to the left of the tree
     if(key[dim] < currentNode->key[dim])
     {
-        KNNValuehelper(key, nearestPQ, currentNode->left);
+        KNNValueshelper(key, kNearestPQ, currentNode->left);
 
         // If the query hypersphere crosses the splitting plane, check the other subtree
-        if(nearestPQ.size() < nearestPQ.maxSize() || fabs(currentNode->key[dim] - key[dim]) < nearestPQ.worst() ) {
+        if(kNearestPQ.size() < kNearestPQ.maxSize() || fabs(currentNode->key[dim] - key[dim]) < kNearestPQ.worst() ) {
 
-            KNNValuehelper(key, nearestPQ, currentNode->right);
+            KNNValueshelper(key, kNearestPQ, currentNode->right);
         }
     }
     else //like Binary Search Tree, if key[dim] >= currentNode->key[dim], turn to the right of the tree
     {
-        KNNValuehelper(key, nearestPQ, currentNode->right);
+        KNNValueshelper(key, kNearestPQ, currentNode->right);
 
         // If the hypersphere crosses the splitting plane, check the other subtree
-        if(nearestPQ.size() < nearestPQ.maxSize() || fabs(currentNode->key[dim] - key[dim]) < nearestPQ.worst() ) {
+        if(kNearestPQ.size() < kNearestPQ.maxSize() || fabs(currentNode->key[dim] - key[dim]) < kNearestPQ.worst() ) {
 
-            KNNValuehelper(key, nearestPQ, currentNode->left);
+            KNNValueshelper(key, kNearestPQ, currentNode->left);
         }
 
     }
 }
 
-/**
- * FindBestValueInBPQ
- * Takes in a bounded Priority Queue of TreeNode* in the KDTree and
- * returns the best value
- */
-template<size_t N, typename ElemType>
-ElemType KDTree<N, ElemType>::FindBestValueInBPQ(BoundedPQueue<TreeNode*> nearestPQ) const {
-
-    multiset<ElemType> values;
-    while(!nearestPQ.empty()) {
-        values.insert((nearestPQ.dequeueMin())->value);
-    }
-
-    ElemType bestMatch;
-    size_t bestOccurence = 0;
-    for(auto iter = values.begin(); iter!=values.end(); ++iter) {
-        if(values.count(*iter) > bestOccurence)
-        {
-            bestMatch = * iter;
-            bestOccurence = values.count(*iter);
-        }
-    }
-
-    return bestMatch;
-}
 
 /** Function for traversing the tree **/
 template <size_t N, typename ElemType>
-typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::traverse_to_leaf(Point<N> pt, TreeNode* root, NodeMinPQ& minPQ)
+typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::exploreToLeaf(Point<N> pt, TreeNode* root, NodeMinPQ& minPQ)
 {
-        TreeNode* untraversed;     // untraversed storing the untraversed TreeNode* on the KD-Tree
-        TreeNode* currentNode = root;
+    TreeNode* untraversed;   // untraversed storing the untraversed TreeNode* on the KD Tree
+    TreeNode* currentNode = root;
 
-        double value;
-        size_t dim;
+    double value;
+    size_t dim;
 
-        while(currentNode!=NULL && currentNode->left!=NULL && currentNode->right!=NULL)   //currentNode->left!=NULL&& currentNode->right!=NULL signifies that currentNode is not a leaf
+    while(currentNode!=NULL && currentNode->left!=NULL && currentNode->right!=NULL)   //currentNode->left!=NULL && currentNode->right!=NULL signifies that currentNode is not a leaf
+    {
+        //partition dimension and value;
+        dim = currentNode->level % N;
+        value = currentNode->value;
+
+        if(dim>=N)
         {
-            // partition dimension and value
-            dim = currentNode->level % N;
-            value = currentNode->value;
-
-            if(dim>=N)
-            {
-                cout<<"error, comparing imcompatibale points"<<endl;
-                return NULL;
-            }
-
-            // go to a child and preserve the other
-            if(pt[dim] <= value)
-            {
-                untraversed = currentNode->right;
-                currentNode = currentNode->left;
-            }
-            else
-            {
-                untraversed = currentNode->left;
-                currentNode = currentNode->right;
-            }
-
-            if(untraversed!=NULL)
-            {
-                minPQ.push(NodeBind(untraversed, fabs(untraversed->value - pt[untraversed->level % N])));
-            }
+            cout<<"error, comparing incompatible points"<<endl;
+            return NULL;
         }
 
-        return currentNode;
+        // go to a child and preserve the other
+        if(pt[dim] < value)
+        {
+            untraversed = currentNode->right;
+            currentNode = currentNode->left;
+        }
+        else
+        {
+            untraversed = currentNode->left;
+            currentNode = currentNode->right;
+        }
+
+        if (untraversed!=NULL)
+        {
+            minPQ.push(NodeBind(untraversed, fabs(untraversed->value- pt[untraversed->level % N])));
+        }
+
     }
 
-/**
-     * Search for approximate k nearest neighbours using the
-     * Best-Bin-First(BBF) approach.
-     *
-     * @param Point<N>   query point data in array form
-     * @param k          number of nearest neighbour returned
-     * @param maxEpoch   maximum of epoch of search
-     *
-     * @return
-     */
-template <size_t N, typename ElemType>
-ElemType KDTree<N, ElemType>::BBFKNNValue(const Point<N>& key, size_t k, size_t maxEpoch) {
+    return currentNode;
+}
 
-    ElemType result;
+/**
+    * Search for approximate k nearest neighbours using Best-Bin-First (BBF) approach
+    * @param key        Query point data
+    * @param k          number of nearest neighbour returned
+    * @param maxEpoch   maximum search epoch
+    **/
+template <size_t N, typename ElemType>
+multiset<ElemType> KDTree<N, ElemType>::BBFKNNValues(const Point<N>& key, size_t k, size_t maxEpoch) {
+
+    multiset<ElemType> result;
 
     size_t epoch = 0;
 
-    TreeNode* currentNode;
+    TreeNode* currentNode = root;
 
-    // checklist for backtracking;
     NodeMinPQ minPQ;
 
-    // min priority queue to keep top k best distance from query point to the bin
-    BoundedPQueue<TreeNode*> nearestPQ(k);
+    BoundedPQueue<TreeNode*> kNearestPQ(k);
 
     double currentBest = numeric_limits<double>::max();
 
     double dist = 0;
 
-    minPQ.push(NodeBind(this->root, 0));    //
+    minPQ.push(NodeBind(this->root, 0));
 
     while(!minPQ.empty() && epoch < maxEpoch)
     {
         currentNode = minPQ.top().key;
         minPQ.pop();
 
-        // find leaf and push unprocessed to minPQ
-        currentNode = traverse_to_leaf(key, currentNode, minPQ);
-
-        for(size_t i=0; i< currentNode->n; ++i)
-        {
-            dist = Distance(currentNode->key, key);
-
-            if(dist < currentBest)
-            {
-                // maintain the bounded min priority queue
-                if(nearestPQ.size()==k)
-                {
-                    //update current best
-                    nearestPQ.pop();
-                    nearestPQ.push(KeyValue<Point<N>>(currentNode->key[i], dist));
-                    currentBest = nearestPQ.top().value;
-                }
-
-               // the special point here is that we need to set best
-               // distance to the distance value of largest smallest
-               // feature
-                else if(nearestPQ.size() == k-1)
-                {
-                    nearestPQ.push(KeyValue<Point<N>>(currentNode->key[i], dist));
-                    currentBest = nearestPQ.top().value;
-                }
-                else
-                {
-                    nearestPQ.push(KeyValue<Point<N>>(currentNode->key[i], dist));
-                }
-            }
-        }
-            ++epoch;
+        //find leaf node and push unprocessed to minPQ
+        currentNode = exploreToLeaf(key, currentNode, minPQ);
     }
 
-        // finally pass results to returned result
-        const size_t detected = nearestPQ.size();
-        for(size_t i = 0; i < detected ; ++i)
+    dist = Distance(currentNode->key, key);
+
+    if(dist < currentBest)
+    {
+        if(kNearestPQ.size()==k)
         {
-            result.push_back(nearestPQ.top().key);
-            nearestPQ.pop();
+            //update the currentBest;
+            kNearestPQ.pop();
+            kNearestPQ.push(KeyValue<Point<N>>(currentNode->key, dist));
+            currentBest = kNearestPQ.top().value;
         }
+        else if(kNearestPQ.size() == k-1)
+        {
+            kNearestPQ.push(KeyValue<Point<N>(currentNode->key, dist));
+            currentBest = kNearestPQ.top().value;
+        }
+        else
+        {
+            knearestPQ.push(KeyValue<Point<N>>(currentNode->key, dist));
+        }
+    }
+
+    ++epoch;
+
+    while(!kNearestPQ.empty())
+    {
+        result.insert((kNearestPQ.dequeueMin())->value);
+    }
 
     return result;
 }
