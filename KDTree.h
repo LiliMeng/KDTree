@@ -148,8 +148,7 @@ private:
     //typedef stack<TreeNode*> NodeStack;
     typedef KeyValue<TreeNode*> NodeBind;
     typedef priority_queue<NodeBind, vector<NodeBind>, greater<NodeBind> > NodeMinPQ;
-    typedef KeyValue<Point<N>> PointBind;
-    typedef priority_queue<PointBind, vector<PointBind> > PointMaxPQ;
+
 
     TreeNode* root;
 
@@ -599,25 +598,8 @@ multiset<ElemType> KDTree<N, ElemType>::BBFKNNValues(const Point<N>& key, size_t
 
     dist = Distance(currentNode->key, key);
 
-    if(dist < currentBest)
-    {
-        if(kNearestPQ.size()==k)
-        {
-            //update the currentBest;
-            kNearestPQ.pop();
-            kNearestPQ.push(KeyValue<Point<N>>(currentNode->key, dist));
-            currentBest = kNearestPQ.top().value;
-        }
-        else if(kNearestPQ.size() == k-1)
-        {
-            kNearestPQ.push(KeyValue<Point<N>(currentNode->key, dist));
-            currentBest = kNearestPQ.top().value;
-        }
-        else
-        {
-            knearestPQ.push(KeyValue<Point<N>>(currentNode->key, dist));
-        }
-    }
+    kNearestPQ.enqueue(currentNode, dist);
+
 
     ++epoch;
 
