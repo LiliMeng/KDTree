@@ -25,7 +25,6 @@ double distance_sq(const vector<double> & data0, const vector<double> & data1)
 
 int main(int argc, const char * argv[])
 {
-
     int K = 3;
     vector<vector<double> > dataset;
     ReadData rd1("sample_data.txt");
@@ -67,8 +66,6 @@ int main(int argc, const char * argv[])
         cout<<"Using KD Tree Search K Nearest Neigbour : The number "<<i+1<<" nearest neighbor index is  "<<indices[i]<<endl;
     }
 
-
-
     // brute force
     unordered_map<double, int> brute_force_htable;
     vector<double> brute_force_vec;
@@ -99,8 +96,6 @@ int main(int argc, const char * argv[])
         }
     }
 
-
-
+    return true;
     return 0;
 }
-
