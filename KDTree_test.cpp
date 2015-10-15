@@ -1,11 +1,3 @@
-/*************************************************
- * File: KDTree_test.cpp
- * Author: Lili Meng (lilimeng1103@gmail.com)
- * File containing several test cases that can be
- * used to verify the correctness of the KDTree
- * implementation.
- */
-
 #include <iostream>
 #include <assert.h>
 #include <unordered_map>
@@ -15,13 +7,6 @@
 
 using namespace std;
 
-/* A utility function to construct a Point from a range of iterators. */
-template <size_t N, typename IteratorType>
-Point<N> PointFromRange(IteratorType begin, IteratorType end) {
-    Point<N> result;
-    copy(begin, end, result.begin());
-    return result;
-}
 
 //A brute force method to check the distances
 double distance_sq(const vector<double> & data0, const vector<double> & data1)
@@ -44,10 +29,8 @@ int main(int argc, const char * argv[])
     int K = 3;
     vector<vector<double> > dataset;
     ReadData rd1("sample_data.txt");
-    int N = rd1.get_num_of_elements();
-    int dim = rd1.get_num_of_dimensions();
     dataset=rd1.allDataPointsVec;
-
+    int N=dataset.size();
     //query_point
     vector<double> query_point;
     vector<vector<double> > query_point_dataset;
@@ -65,20 +48,16 @@ int main(int argc, const char * argv[])
         key[i]=query_point[i];
     }
 
-  double dataPoints[N][dim];
-   for(int i=0; i<N; i++)
-   {
-        for(int j=0; j<dim; j++)
-        {
-             dataPoints[i][j]=dataset[i][j];
-        }
-   }
 
-
-    for (size_t i = 0; i < N; ++i)
+    vector<size_t> pointIndices;
+    for(int i=0; i<N; i++)
     {
-        kd.insert(PointFromRange<128>(dataPoints[i], dataPoints[i] + 128), i);
+        pointIndices.push_back(i);
     }
+
+    kd.buildTree(dataset, pointIndices);
+
+
 
     vector<size_t> indices = kd.kNNValues(key, 3);
 
@@ -111,7 +90,7 @@ int main(int argc, const char * argv[])
         cout<<"Using Brute-Force method Search: The number "<<i+1<<" nearest neighbor index is  "<< brute_force_htable[brute_force_vec[i]]<<"\t"<<"The brute-force distance is "<<brute_force_vec[i]<<endl;
     }
 
-    /** Compare the KD-Tree with the Brute-Force Method**/
+    /**Compare the KD-Tree with the Brute-Force Method**/
     for (int i = 0; i<indices.size(); i++)
     {
         if(indices[i]==brute_force_htable[brute_force_vec[i]])
