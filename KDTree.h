@@ -1,7 +1,7 @@
 /**
  * File: KDTree.h
- * Author Lili Meng (lilimeng1103@gmail.com) mainly based on the code by Keith Schwarz (htiek@cs.stanford.edu) and @JohnYangSam JohnYangSam's code
- * Thanks a lot for the fruitful discussion with Jimmy Chen, Victor Gan, Keith Schwarz.
+ * Author Lili Meng (lilimeng1103@gmail.com) mainly based on the code by Keith Schwarz (htiek@cs.stanford.edu)
+ * Thanks a lot for the discussion with Jimmy Chen, Victor Gan, Keith Schwarz.
  * ------------------------
  * Perform constructing trees, efficient exact query for k-nearest neighbors based on Bounded priority queue kd-tree,
  * Best-Bin-First(BBF) query for approximate k-nearest neighbors search.
@@ -35,6 +35,14 @@ struct KeyValue
     V value;
     KeyValue(const T k, const V v) : key(k), value(v){}
 };
+
+/* A utility function to construct a Point from a range of iterators. */
+template <size_t N, typename IteratorType>
+Point<N> PointFromRange(IteratorType begin, IteratorType end) {
+    Point<N> result;
+    copy(begin, end, result.begin());
+    return result;
+}
 
 template <size_t N, typename ElemType>
 class KDTree {
@@ -81,10 +89,6 @@ public:
     size_t size() const;
     bool empty() const;
 
-     /** load data from file **/
-
-    void loadData(string dataFileName, vector<vector<double>>& dataPointsVec)
-
     /** bool contains(const Point<N>& pt) const;
      * Usage: if (kd.contains(pt))
      * ----------------------------------------------------
@@ -103,7 +107,7 @@ public:
     void insert(const Point<N>& pt, const ElemType& value);
 
     /** Build Tree*/
-    void buildTree(vector<vector<double> > dataPointsVec, const ElemType& value)
+    void buildTree(const vector<vector<double>>& dataPointsVec, const vector<ElemType>& indices);
 
     /** ElemType& operator[](const Point<N>& pt);
      * Usage: kd[v] = "Some Value";
@@ -132,11 +136,11 @@ public:
      * points. In the event of a tie, one of the most frequent value will be
      * chosen.
      **/
-    multiset<ElemType> kNNValues(const Point<N>& key, size_t k) const;
+   vector<ElemType> kNNValues(const Point<N>& key, size_t k) const;
 
-    multiset<Point<N>> getkNNPoints(const Point<N>& key, size_t k) const;
+   // multiset<ElemType> getkNNPoints(const Point<N>& key, size_t k) const;
 
-    multiset<Point<N>> getBBFKNNPoints(const Point<N>& key, size_t k, size_t maxEpoch);
+   // multiset<ElemType> getBBFKNNPoints(const Point<N>& key, size_t k, size_t maxEpoch);
 
 private:
 
@@ -173,6 +177,9 @@ private:
 
     /** KNNValue helper function of building BoundedPQueue for the KNNValue  */
     void KNNValueshelper(const Point<N>&key, BoundedPQueue<TreeNode*>& kNearestPQ, TreeNode* currentNode) const;
+
+    /** KNNValue helper to find most common value in BoundedPriorityQueue **/
+    ElemType FindMostCommonValueInPQ(BoundedPQueue<TreeNode*> nearestPQ) const;
 
     /** function for traversing to the leaf＊*/
     TreeNode* exploreToLeaf(Point<N> pt, TreeNode* root, NodeMinPQ& container);
@@ -305,15 +312,6 @@ bool KDTree<N, ElemType>::contains(const Point<N>& pt) const{
     return false;
 }
 
-template <size_t N, typename ElemType>
-void KDTree<N, ElemType>::loadData(string dataFileName, vector<vector<double>>& dataPointsVec) {
-
-    ReadData rd("sample_data.txt");
-    int row=rd1.get_num_of_elements();
-    int N=rd1.get_num_of_dimensions();
-    dataPointsVec=rd1.allDataPointsVec;
-}
-
 
 /** Insert the specified point into the KDTree with associated value. If the point already exists in the KDTree, the old value is overwritten **/
 template <size_t N, typename ElemType>
@@ -371,23 +369,24 @@ void KDTree<N, ElemType>::insert(const Point<N>& pt, const ElemType& value) {
 }
 
 template <size_t N, typename ElemType>
-void KDTree<N, ElemType>::buildTree(vector<vector<double> > dataPointsVec, const ElemType& value)
+void KDTree<N, ElemType>::buildTree(const vector<vector<double>>& dataPointsVec, const vector<ElemType>& indices)
 {
+    int numberOfElements = dataPointsVec.size();
+    int dim = dataPointsVec[1].size();
 
-    Point<N> dataPoint;
-    for(int i=0; i<dataPointsVec.size(); i++)
+    double dataPoints[numberOfElements][dim];
+    for(int i=0; i<numberOfElements; i++)
     {
-        for(int j=0; j<dataPointsVec[i].size(); j++)
+        for(int j=0; j<dim; j++)
         {
-            dataPoint.coords[j]=dataPointsVec[i][j];
+             dataPoints[i][j]=dataPointsVec[i][j];
         }
-
     }
 
      for(int i=0; i<dataPointsVec.size(); i++)
     {
 
-        insert(dataPoint, value);
+       insert(PointFromRange<N>(dataPoints[i], dataPoints[i] + N), indices[i]);
 
     }
 }
@@ -503,34 +502,20 @@ const ElemType& KDTree<N, ElemType>::at(const Point<N>& pt) const {
 
 }
 
+
 /** Exact Query of K Nearest-Neigbour **/
 template <size_t N, typename ElemType>
-multiset<ElemType> KDTree<N, ElemType>::kNNValues(const Point<N>& key, size_t k) const {
+vector<ElemType> KDTree<N, ElemType>::kNNValues(const Point<N>& key, size_t k) const {
 
     BoundedPQueue<TreeNode*> kNearestPQ(k);
     KNNValueshelper(key, kNearestPQ, root);
 
-    multiset<ElemType> values;
+    vector<ElemType> kNNValues;
     while(!kNearestPQ.empty())
     {
-        values.insert((kNearestPQ.dequeueMin())->value);
+        kNNValues.push_back((kNearestPQ.dequeueMin())->value);
     }
-    return values;
-}
-
-/** Exact Query of K Nearest-Neigbour **/
-template <size_t N, typename ElemType>
-multiset<Point<N>> KDTree<N, ElemType>::getkNNPoints(const Point<N>& key, size_t k) const {
-
-    BoundedPQueue<TreeNode*> kNearestPQ(k);
-    KNNValueshelper(key, kNearestPQ, root);
-
-    multiset<Point<N>> kNNPoints;
-    while(!kNearestPQ.empty())
-    {
-        values.insert((kNearestPQ.dequeueMin())->key);
-    }
-    return kNNPoints;
+    return kNNValues;
 }
 
 /**
@@ -572,8 +557,9 @@ void KDTree<N, ElemType>::KNNValueshelper(const Point<N>& key, BoundedPQueue<Tre
     }
 }
 
+/*
 
-/** Function for traversing the tree **/
+/** Function for traversing the tree
 template <size_t N, typename ElemType>
 typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::exploreToLeaf(Point<N> pt, TreeNode* root, NodeMinPQ& minPQ)
 {
@@ -582,6 +568,8 @@ typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::exploreToLeaf(Point
 
     double value;
     size_t dim;
+
+    minPQ.push(NodeBind(currentNode, fabs(pt[currentNode->level % N]-untraversed->key[untraversed->level % N]);
 
     while(currentNode!=NULL && currentNode->left!=NULL && currentNode->right!=NULL)   //currentNode->left!=NULL && currentNode->right!=NULL signifies that currentNode is not a leaf
     {
@@ -596,9 +584,9 @@ typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::exploreToLeaf(Point
         }
 
         // go to a child and preserve the other
-        if(pt[dim] < value)
+        if(pt[dim] < currenNode->key[dim])
         {
-            untraversed = currentNode->right;
+            untraversed = currentNode;
             currentNode = currentNode->left;
         }
         else
@@ -609,7 +597,7 @@ typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::exploreToLeaf(Point
 
         if (untraversed!=NULL)
         {
-            minPQ.push(NodeBind(untraversed, fabs(untraversed->value- pt[untraversed->level % N])));
+            minPQ.push(NodeBind(untraversed, fabs(pt[untraversed->level % N]-untraversed->key[untraversed->level % N]);
         }
 
     }
@@ -617,12 +605,12 @@ typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::exploreToLeaf(Point
     return currentNode;
 }
 
-/**
+
     * Search for approximate k nearest neighbours using Best-Bin-First (BBF) approach
     * @param key        Query point data
     * @param k          number of nearest neighbour returned
     * @param maxEpoch   maximum search epoch
-    **/
+
 template <size_t N, typename ElemType>
 multiset<Point<N>> KDTree<N, ElemType>::getBBFKNNPoints(const Point<N>& key, size_t k, size_t maxEpoch) {
 
@@ -682,5 +670,6 @@ multiset<Point<N>> KDTree<N, ElemType>::getBBFKNNPoints(const Point<N>& key, siz
 
     return result;
 }
+**/
 
 #endif // KDTREE_INCLUDED
