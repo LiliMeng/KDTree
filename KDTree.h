@@ -19,6 +19,14 @@
 #include <stdexcept>
 #include <cmath>
 #include <queue>
+#include <vector>
+#include <assert.h>
+#include <stack>
+#include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <unordered_map>
+#include <stdio.h>
 
 #include "Point.h"
 #include "BoundedPQueue.h"
@@ -26,15 +34,6 @@
 
 using namespace std;
 
-/// key value pair. Not use the std::pair because there is default
-/// "<" operator overloading for it and it is too heavy for operation.
-template <class T, class V = double>
-struct KeyValue
-{
-    T key;
-    V value;
-    KeyValue(const T k, const V v) : key(k), value(v){}
-};
 
 /* A utility function to construct a Point from a range of iterators. */
 template <size_t N, typename IteratorType>
@@ -43,6 +42,58 @@ Point<N> PointFromRange(IteratorType begin, IteratorType end) {
     copy(begin, end, result.begin());
     return result;
 }
+
+class distance_index
+{
+public:
+    int index_;
+    double distance_;
+
+    distance_index(int index, double distance)
+    {
+        index_ = index;
+        distance_ = distance;
+    }
+
+    bool operator < (const distance_index & other) const
+    {
+        return this->distance_ < other.distance_;
+    }
+
+    bool operator > (const distance_index & other) const
+    {
+        return this->distance_ > other.distance_;
+    }
+
+};
+
+template<typename T>
+class TreeNode_distance
+{
+public:
+    T node_;
+    double distance_;
+
+    TreeNode_distance(T node, double distance)
+    {
+        node_=node;
+        distance_ = distance;
+    }
+
+    bool operator < (const TreeNode_distance & other) const
+    {
+        return this->distance_ < other.distance_;
+    }
+
+     bool operator > (const TreeNode_distance & other) const
+    {
+        return this->distance_ > other.distance_;
+    }
+
+};
+
+
+
 
 template <size_t N, typename ElemType>
 class KDTree {
@@ -128,6 +179,9 @@ public:
     ElemType& at(const Point<N>& pt);
     const ElemType& at(const Point<N>& pt) const;
 
+    /** function for saving the KD tree to file **/
+    bool save_tree_to_file(const char* fileName);
+
     /** vector<ElemType> kNNValue(const Point<N>& key, size_t k) const
      * Usage: k nearest ;
      * ----------------------------------------------------
@@ -142,8 +196,7 @@ public:
      * Given a point key and an integer k, finds the k nearest neighbors in the KDTree
      * nearest to key
      **/
-
- //  vector<ElemType> BBFkNNValues(const Point<N>& key, size_t k, size_t maxEpoch) const;
+    vector<ElemType> BBFkNNValues(const Point<N>& query_point, size_t k, size_t maxEpoch) const;
 
 
 private:
@@ -155,17 +208,13 @@ private:
         Point<N> key;
         ElemType value;
         size_t level;
-        //int n; number of Point<N> in one TreeNode*, that is to say, how many children does this TreeNode have?
         //int leaf;   /** 1 if node is a leaf, 0 otherwise */
 
         TreeNode* left;
         TreeNode* right;
     };
 
-     // typedef to avoid ugly long declaration
-    //typedef stack<TreeNode*> NodeStack;
-    typedef KeyValue<TreeNode*> NodeBind;
-    typedef priority_queue<NodeBind, vector<NodeBind>, greater<NodeBind> > NodeMinPQ;
+    typedef priority_queue<TreeNode_distance<TreeNode*>, vector<TreeNode_distance<TreeNode*>>, greater<TreeNode_distance<TreeNode*>>> NodeMinPQ;
 
     TreeNode* root;
 
@@ -179,14 +228,14 @@ private:
     /** Helper function for copying KDTree **/
     TreeNode* copyTree(TreeNode* rootNode);
 
+    /** Helper function for saving tree to disk **/
+    void save_tree_helper(FILE *pf, TreeNode* node);
+
     /** KNNValue helper function of building BoundedPQueue for the KNNValue  */
     void KNNValueshelper(const Point<N>&key, BoundedPQueue<TreeNode*>& kNearestPQ, TreeNode* currentNode) const;
 
     /** function for traversing to the leaf＊*/
-  //  TreeNode* exploreToLeaf(const Point<N>& pt, TreeNode* root, NodeMinPQ& container);
-
-    /** function for counting the number of Point<N> under one TreeNode*/
-    int countNodes(TreeNode* root);  // that is to say, how many children nodes does this TreeNode have?
+    TreeNode* bbfExploreToLeaf(const Point<N>& pt, TreeNode* root, NodeMinPQ& minPQ) const;
 
 };
 
@@ -503,6 +552,37 @@ const ElemType& KDTree<N, ElemType>::at(const Point<N>& pt) const {
 
 }
 
+template <size_t N, typename ElemType>
+void  KDTree<N, ElemType>::save_tree_helper(FILE *pf, TreeNode* node)
+{
+    if (!node) {
+        fprintf(pf, "#\n");
+        return;
+    }
+    size_t dim = node->level % N;
+    // write current node
+    fprintf(pf, "%u\t %lf\n", node->level%N, node->key[dim]);
+
+    save_tree_helper(pf, node->left);
+    save_tree_helper(pf, node->right);
+}
+
+template <size_t N, typename ElemType>
+bool KDTree<N, ElemType>::save_tree_to_file(const char* fileName)
+{
+    assert(root);
+    FILE *pf = fopen(fileName, "w");
+    if (!pf) {
+        cout<<"can not open file "<<fileName<<endl;
+        return false;
+    }
+
+    fprintf(pf, "level\t split_value_\n");
+
+    save_tree_helper(pf, root);
+    fclose(pf);
+    return true;
+}
 
 /** Exact Query of K Nearest-Neigbour **/
 template <size_t N, typename ElemType>
@@ -558,11 +638,11 @@ void KDTree<N, ElemType>::KNNValueshelper(const Point<N>& key, BoundedPQueue<Tre
     }
 }
 
-/*
 
-/** Function for traversing the tree
+
+/** Function for traversing the tree**/
 template <size_t N, typename ElemType>
-typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::exploreToLeaf(const Point<N>& pt, TreeNode* root, NodeMinPQ& minPQ)
+typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::bbfExploreToLeaf(const Point<N>& pt, TreeNode* root, NodeMinPQ& untraversed_minPQ) const
 {
     TreeNode* untraversed;   // untraversed storing the untraversed TreeNode* on the KD Tree
     TreeNode* currentNode = root;
@@ -576,11 +656,6 @@ typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::exploreToLeaf(const
         dim = currentNode->level % N;
         value = currentNode->value;
 
-        if(dim>=N)
-        {
-            cout<<"error, comparing incompatible points"<<endl;
-            return NULL;
-        }
 
         // go to a child and preserve the other
         if(pt[dim] < currentNode->key[dim])
@@ -594,10 +669,12 @@ typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::exploreToLeaf(const
             currentNode = currentNode->right;
         }
 
-        if (untraversed!=NULL)
+        if(untraversed!=NULL)
         {
-            minPQ.push(NodeBind(untraversed, fabs(pt[untraversed->level % N]-untraversed->key[untraversed->level % N])));
+            TreeNode_distance<TreeNode*> di(untraversed, fabs(pt[untraversed->dim]-untraversed->key[dim]));
+            untraversed_minPQ.push(di);
         }
+
 
     }
 
@@ -611,64 +688,42 @@ typename KDTree<N, ElemType>::TreeNode* KDTree<N, ElemType>::exploreToLeaf(const
     * @param maxEpoch   maximum search epoch
 
 template <size_t N, typename ElemType>
-vector<ElemType> KDTree<N, ElemType>::BBFkNNValues(const Point<N>& key, size_t k, size_t maxEpoch) const{
-
-    vector<ElemType> result;
-
-    size_t epoch = 0;
-
-    TreeNode* currentNode = root;
-
-    NodeMinPQ minPQ;
+vector<ElemType> KDTree<N, ElemType>::BBFkNNValues(const Point<N>& query_point, size_t k, size_t maxEpoch) const{
 
     BoundedPQueue<TreeNode*> kNearestPQ(k);
 
-    double currentBest = numeric_limits<double>::max();
+    size_t epoch = 0;
 
-    double dist = 0;
+    double max_distance = numeric_limits<double>::max();
 
-    minPQ.push(NodeBind(this->root, 0));
+    TreeNode* cur_node = root;
 
-    while(!minPQ.empty() && epoch < maxEpoch)
+    NodeMinPQ priority_unexplored_points;
+
+    TreeNode_distance<TreeNode*> di(root, 0);
+    priority_unexplored_points.push(di);
+
+    priority_queue<distance_index> priority_points;
+
+    while(!priority_unexplored_points.empty() && epoch < maxEpoch)
     {
-        currentNode = minPQ.top().key;
-        minPQ.pop();
 
-        //find leaf node and push unexplored to minPQ
-        currentNode = exploreToLeaf(key, currentNode, minPQ);
+        bbfExploreToLeaf(query_point, cur_node, priority_unexplored_points);
+
+        kNearestPQ.enqueue(priority_unexplored_points.top().node_, priority_unexplored_points.top().distance_);
+
+        ++epoch;
+
     }
 
-    dist = Distance(currentNode->key, key);
 
-    if(dist < currentBest)
-    {
-        if(kNearestPQ.size()==k)
-        {
-            //update the currentBest;
-            kNearestPQ.pop();
-            kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
-            currentBest = kNearestPQ.best();
-        }
-        else if(kNearestPQ.size() == k-1)
-        {
-            kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
-            currentBest = kNearestPQ.best();
-        }
-        else
-        {
-            kNearestPQ.enqueue(currentNode, Distance(currentNode->key, key));
-        }
-    }
-
-    ++epoch;
-
+    vector<ElemType> bbfkNNValues;
     while(!kNearestPQ.empty())
     {
-        result.push_back((kNearestPQ.dequeueMin())->value);
+         kNNValues.push_back((kNearestPQ.dequeueMin())->value);
     }
+    return bbfkNNValues;
+}*/
 
-    return result;
-}
-**/
 
 #endif // KDTREE_INCLUDED
