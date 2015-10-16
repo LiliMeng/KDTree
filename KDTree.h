@@ -1,6 +1,6 @@
 /**
  * File: KDTree.h
- * Author Lili Meng (lilimeng1103@gmail.com) mainly based on the code by Keith Schwarz (htiek@cs.stanford.edu) and JohnYangSam
+ * Author Lili Meng (lilimeng1103@gmail.com) based on the code by Keith Schwarz (htiek@cs.stanford.edu) and JohnYangSam
  * Thanks a lot for the discussion with Jimmy Chen, Victor Gan, Keith Schwarz.
  * ------------------------
  * Perform constructing trees, efficient exact query for k-nearest neighbors based on Bounded priority queue kd-tree,
