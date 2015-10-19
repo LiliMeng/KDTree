@@ -41,12 +41,16 @@ int main(int argc, const char * argv[])
 
     KDTree<128, size_t> kd;
 
-    Point<128> key;
-    for(int i=0; i<128; i++)
-    {
-        key[i]=query_point[i];
-    }
-
+   vector<Point<128>> keyVec;
+   Point<128> key;
+   for(int i=0; i<query_point_dataset.size(); i++)
+   {
+        for(int j=0; j<128; j++)
+        {
+            key[j]=query_point_dataset[i][j];
+        }
+        keyVec.push_back(key);
+   }
 
     vector<size_t> pointIndices;
     for(int i=0; i<N; i++)
@@ -58,36 +62,21 @@ int main(int argc, const char * argv[])
 
 
 
-    vector<size_t> indices = kd.kNNValues(key, 3);
+    vector<size_t> indices;
 
 
-    for (int i = 0; i<indices.size(); i++)
+    for(int i=0; i<query_point_dataset.size(); i++)
     {
-        cout<<"Using KD Tree Search K Nearest Neigbour : The number "<<i+1<<" nearest neighbor index is  "<<indices[i]<<endl;
-    }
+        indices = kd.kNNValues(keyVec[i], K);
+        for (int j = 0; j<K; j++)
+        {
+            cout<<"For the number row  "<<i<<"  query point, Using Exact kNN Search 3 Nearest Neigbour : The number "<<j+1<<" nearest neighbor index is  "<<indices[j]<<endl;
+        }
 
-    // brute force
-    unordered_map<double, int> brute_force_htable;
-    vector<double> brute_force_vec;
-
-    for (int i = 0; i< N; i++)
-    {
-        double dist = distance_sq(query_point, dataset[i]);
-
-        brute_force_htable.insert({dist, i});
-        brute_force_vec.push_back(dist);
     }
 
 
-    std::sort(brute_force_vec.begin(), brute_force_vec.end());
-
-
-    for(int i = 0; i<K; i++)
-    {
-        cout<<"Using Brute-Force method Search: The number "<<i+1<<" nearest neighbor index is  "<< brute_force_htable[brute_force_vec[i]]<<"\t"<<"The brute-force distance is "<<brute_force_vec[i]<<endl;
-    }
-
-    /**Compare the KD-Tree with the Brute-Force Method**/
+    /**Compare the KD-Tree with the Brute-Force Method*
     for (int i = 0; i<indices.size(); i++)
     {
         if(indices[i]==brute_force_htable[brute_force_vec[i]])
@@ -96,6 +85,6 @@ int main(int argc, const char * argv[])
         }
     }
 
-    return true;
+    */
     return 0;
 }
